@@ -140,18 +140,24 @@ function main() {
   // 注册扩展
   let ext = seal.ext.find('GUGUtask');
   if (!ext) {
-    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.0.1');
+    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.1.0');
     seal.ext.register(ext);
   }
   // 编写任务指令
   const cmdTask = seal.ext.newCmdItemInfo();
   cmdTask.name = '任务';
   cmdTask.help = '咕咕任务管理命令，可用以下参数：\n' +
-    '.任务 add <任务名> <截止天数/截止日期> [是] - 添加任务，截止日期可以是天数或YYYY-MM-DD格式，"是"表示设置提醒\n' +
-    '.任务 list [用户ID] - 查看任务列表，可选参数用户ID查看指定用户的任务\n' +
-    '.任务 delete <任务名/过期> - 删除指定任务，使用"过期"删除所有过期任务\n' +
-    '.任务 update <任务名> <进度> - 更新任务进度(0-100)\n' +
-    '.任务 remind - 发送当前群组的任务提醒，默认每日固定时间提醒\n' +
+    '.任务 add <任务名> <截止天数/截止日期> [是/QQ号/公开] [是] - 添加任务\n' +
+    '  - 截止日期可以是天数或YYYY-MM-DD格式\n' +
+    '  - "是"表示设置提醒\n' +
+    '  - 可选QQ号来为其他用户添加任务\n' +
+    '  - "公开"表示添加到公开任务列表\n' +
+    '.任务 list [QQ号] - 查看任务列表，包括个人任务和公开任务\n' +
+    '.任务 delete <任务id/过期> [QQ号/公开] - 删除任务\n' +
+    '  - 使用"过期"删除所有过期任务\n' +
+    '  - 可指定QQ号或"公开"来删除指定对象的任务\n' +
+    '.任务 update <任务id> <进度> [QQ号/公开] - 更新任务进度(0-100)\n' +
+    '.任务 remind - 发送当前群组的任务提醒\n' +
     '.任务 help - 显示本帮助';
   cmdTask.solve = (ctx, msg, cmdArgs) => {
     // 检查触发用户，请求数据库
@@ -167,13 +173,14 @@ function main() {
       taskStoredata = JSON.parse(ext.storageGet(STORAGE_KEY));
     }
     let taskStore: TaskStore = taskStoredata[userid] || { tasks: [] };//获取用户的任务列表
+    let taskStorepublic: TaskStore = taskStoredata['public'] || { tasks: [] };//获取公开任务列表
     const subCmd = cmdArgs.getArgN(1);
     switch (subCmd) {
       case 'add': {
         const name = cmdArgs.getArgN(2);
         //分支：若参数3输入为数字，则表示截止天数，若为日期格式YYYY-MM-DD，则表示截止日期
         const deadline = cmdArgs.getArgN(3);
-        const taskremindertype = cmdArgs.getArgN(4);
+        const arg4 = cmdArgs.getArgN(4);
         let deadlineDate = gettime(msg.time);
         //设定小时和分钟和秒为晚上12点整
         deadlineDate.setHours(0);
@@ -211,86 +218,158 @@ function main() {
           strdeadline += `${deadlineDate.getDate()}`;
         }
         let newtask: Task = {
-          id: `${userid}-${Date.now()}`,
+          id: `${msg.time}`,
           groupid: groupid,
           name: name,
           deadline: strdeadline,
           progress: "0",
           completed: "0"
         };
+        let targetid = userid;
+        let targetStore = taskStore;
         let replytextadd = `任务： "${name}" 已添加，截止时间 ${strdeadline}`;
-        if (taskremindertype == '是') {
+        if (arg4 == '是') {//判断是否存在参数4并且判断参数4是否是是
           newtask.reminder = "1";
           replytextadd = `任务： "${name}" 已添加，截止时间 ${strdeadline}，已设置提醒`;
-        }
+        } else if(arg4 && /^\d+$/.test(arg4)){//判断参数4是否是qq号
+          const arg5 = cmdArgs.getArgN(5);
+          targetid = `QQ:` + arg4;
+          if (arg5 == '是') {
+            newtask.reminder = "1";
+            replytextadd = `对象为${arg4}的任务： "${name}" 已添加，截止时间 ${strdeadline}，已设置提醒`;
+          }
+          else {
+            replytextadd = `对象为${arg4}的任务： "${name}" 已添加，截止时间 ${strdeadline}`;
+          }
+        } else if(arg4 && arg4 == '公开'){
+          targetid = 'public';
+          targetStore = taskStorepublic;
+          if (cmdArgs.getArgN(5) == '是') {
+            newtask.reminder = "1";
+            replytextadd = `公开任务： "${name}" 已添加，截止时间 ${strdeadline}，已设置提醒`;
+          }else {
+            replytextadd = `公开任务： "${name}" 已添加，截止时间 ${strdeadline}`;
+          }
+        } else {}
         //回填数据库
-        taskStore.tasks.push(newtask);
-        taskStoredata[userid] = taskStore;
+        targetStore.tasks.push(newtask);
+        taskStoredata[targetid] = targetStore;
         ext.storageSet(STORAGE_KEY, JSON.stringify(taskStoredata));
         seal.replyToSender(ctx, msg, replytextadd);
         return seal.ext.newCmdExecuteResult(true);
       }
       case 'list': {
         if (!cmdArgs.getArgN(2)) {
-          if (taskStore.tasks.length === 0) {
-            seal.replyToSender(ctx, msg, '当前没有任务');
-          } else {
+          let yourlisttext = '🈚';
+          let publiclisttext = '🈚';
+          if (taskStore.tasks.length !== 0){
             const taskList = taskStore.tasks.map(t =>
-              `[${t.completed === '1' ? '✅' : '⏳'}] ${t.name} (进度: ${t.progress}%, 截止: ${t.deadline})`
+              `[${t.completed === '1' ? '✅' : '⏳'}] 编号：${t.id}任务：${t.name} (进度: ${t.progress}%, 截止: ${t.deadline})`
             ).join('\n');
-            seal.replyToSender(ctx, msg, `当前任务列表：\n${taskList}`);
+            yourlisttext = `${taskList}`;
           }
+          //筛选groupid是本群id的公共任务
+          let thisgrouptaskstore: TaskStore = { tasks: [] };
+          for (let task of taskStorepublic.tasks) {
+            if (task.groupid == groupid) {
+              thisgrouptaskstore.tasks.push(task);
+            }
+          }
+          if (thisgrouptaskstore.tasks.length !== 0){
+            const publictasklist = thisgrouptaskstore.tasks.map(t =>
+              `[${t.completed === '1' ? '✅' : '⏳'}] 编号：${t.id}任务：${t.name} (进度: ${t.progress}%, 截止: ${t.deadline})`
+            ).join('\n');
+            publiclisttext = `${publictasklist}`;
+          }
+          seal.replyToSender(ctx, msg, `你的任务列表：\n${yourlisttext}\n公开任务列表：\n${publiclisttext}`);
           return seal.ext.newCmdExecuteResult(true);
         }else {
           let targetuserid = cmdArgs.getArgN(2);
           let targettaskStore: TaskStore = taskStoredata[targetuserid] || { tasks: [] };
-          if (targettaskStore.tasks.length === 0) {
-            seal.replyToSender(ctx, msg, '该用户当前没有任务');
-          } else {
-            const taskList = targettaskStore.tasks.map(t =>
+          let yourlisttext = '🈚';
+          let publiclisttext = '🈚';
+          if (targettaskStore.tasks.length !== 0){
+            const taskList = taskStore.tasks.map(t =>
               `[${t.completed === '1' ? '✅' : '⏳'}] ${t.name} (进度: ${t.progress}%, 截止: ${t.deadline})`
             ).join('\n');
-            seal.replyToSender(ctx, msg, `用户 ${targetuserid} 的任务列表：\n${taskList}`);
+            yourlisttext = `${taskList}`;
           }
+          //筛选groupid是本群id的公共任务
+          let thisgrouptaskstore: TaskStore = { tasks: [] };
+          for (let task of taskStorepublic.tasks) {
+            if (task.groupid == groupid) {
+              thisgrouptaskstore.tasks.push(task);
+            }
+          }
+          if (thisgrouptaskstore.tasks.length !== 0){
+            const publictasklist = thisgrouptaskstore.tasks.map(t =>
+              `[${t.completed === '1' ? '✅' : '⏳'}] ${t.name} (进度: ${t.progress}%, 截止: ${t.deadline})`
+            ).join('\n');
+            publiclisttext = `${publictasklist}`;
+          }
+          seal.replyToSender(ctx, msg, `你的任务列表：\n${yourlisttext}\n公开任务列表：\n${publiclisttext}`);
           return seal.ext.newCmdExecuteResult(true);
         }
       }
       case 'delete': {
-        const taskname = cmdArgs.getArgN(2);
-        if (!taskname) {
+        const taskid = cmdArgs.getArgN(2);
+        let targetid = userid;
+        let tasktargetStore = taskStore;
+        if (!taskid) {
           return seal.ext.newCmdExecuteResult(false);
         }
-        if (taskname === '过期') {
+        const userflag = cmdArgs.getArgN(3);
+        if (userflag && /^\d+$/.test(userflag)) {
+          targetid = `QQ:` + userflag;
+          tasktargetStore = taskStoredata[targetid] || { tasks: [] };
+        } else if (userflag && userflag == '公开') {
+          targetid = 'public';
+          tasktargetStore = taskStorepublic;
+        } else {}
+        if (taskid === '过期') {
           deletepast(ext, gettime(msg.time));
           seal.replyToSender(ctx, msg, `已删除所有过期任务`);
           return seal.ext.newCmdExecuteResult(true);
         }
-        const index = taskStore.tasks.findIndex(t => t.name === taskname);
+        const index = tasktargetStore.tasks.findIndex(t => t.id === taskid);
         if (index === -1) {
-          seal.replyToSender(ctx, msg, `未找到任务: ${taskname}`);
+          seal.replyToSender(ctx, msg, `未找到id为${taskid}的任务。`);
           return seal.ext.newCmdExecuteResult(false);
         }
-        taskStore.tasks.splice(index, 1);
-        taskStoredata[userid] = taskStore;
+        tasktargetStore.tasks.splice(index, 1);
+        taskStoredata[targetid] = tasktargetStore;
         ext.storageSet(STORAGE_KEY, JSON.stringify(taskStoredata));
-        seal.replyToSender(ctx, msg, `任务：${taskname}已删除`);
+        seal.replyToSender(ctx, msg, `id为${taskid}的任务已删除。`);
         return seal.ext.newCmdExecuteResult(true);
       }
       case 'update': {
-        const taskname = cmdArgs.getArgN(2);
+        const taskid = cmdArgs.getArgN(2);
         const progress = Number(cmdArgs.getArgN(3));
-        if (!taskname || isNaN(progress) || progress < 0 || progress > 100) {
+        const userflag = cmdArgs.getArgN(4);
+        let targetid = userid;
+        let tasktargetStore = taskStore;
+        if (userflag && /^\d+$/.test(userflag)) {
+          targetid = `QQ:` + userflag;
+          tasktargetStore = taskStoredata[targetid] || { tasks: [] };
+        } else if (userflag && userflag == '公开') {
+          targetid = 'public';
+          tasktargetStore = taskStorepublic;
+        } else {}
+        if (!taskid || isNaN(progress) || progress < 0 || progress > 100) {
           return seal.ext.newCmdExecuteResult(false);
         }
-        const task = taskStore.tasks.find(t => t.name === taskname);
-        if (!task) {
+        const index = tasktargetStore.tasks.findIndex(t => t.id === taskid);
+        if (index === -1) {
+          seal.replyToSender(ctx, msg, `未找到id为${taskid}的任务。`);
           return seal.ext.newCmdExecuteResult(false);
         }
-        task.progress = String(progress);
+        tasktargetStore.tasks[index].progress = `${progress}`;
         if (progress === 100) {
-          task.completed = '1';
+          tasktargetStore.tasks[index].completed = '1';
         }
-        seal.replyToSender(ctx, msg, `任务 "${task.name}" 进度已更新为 ${progress}%`);
+        taskStoredata[targetid] = tasktargetStore;
+        ext.storageSet(STORAGE_KEY, JSON.stringify(taskStoredata));
+        seal.replyToSender(ctx, msg, `id为${taskid}的任务进度已更新为 ${progress}%`);
         return seal.ext.newCmdExecuteResult(true);
       }
       case 'remind': {
@@ -305,7 +384,8 @@ function main() {
         return ret;
       }
       default: {
-        seal.replyToSender(ctx, msg, '未知的任务命令，请使用".任务 help"查看帮助');
+        seal.replyToSender(ctx, msg, `咕咕任务管理插件，可使用add/list/delete/update/remind/help命令`);
+        return seal.ext.newCmdExecuteResult(false);
       }
     }
   }
@@ -313,7 +393,7 @@ function main() {
   ext.cmdMap['任务'] = cmdTask;
   //注册定时任务
   seal.ext.registerTask(ext, "cron", '0 12 * * *', (taskCtx) =>  remind(ext), "reminder", "任务系统的每日提醒");
-  seal.ext.registerTask(ext, "cron", '0 0 * * *', (taskCtx) =>  deletepast(ext, gettime(taskCtx.now)), "renewpast", "任务系统的每晚自清理");
+  seal.ext.registerTask(ext, "cron", '0 16 * * *', (taskCtx) =>  deletepast(ext, gettime(taskCtx.now)), "renewpast", "任务系统的每晚自清理");
 }
 
 main();

@@ -1,4 +1,4 @@
-var filename = 'sealdice-js-gugutask.js'
+var filename = 'gugutask.js'
 
 module.exports = {
   dev: {
