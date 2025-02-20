@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         咕咕任务
 // @author       NewWYoming
-// @version      1.1.1
+// @version      1.1.4
 // @description  群组任务管理插件，支持任务添加、删除、更新、提醒等功能
 // @timestamp    1739969376
 // 2025/2/19

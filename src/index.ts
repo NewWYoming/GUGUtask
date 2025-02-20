@@ -140,7 +140,7 @@ function main() {
   // 注册扩展
   let ext = seal.ext.find('GUGUtask');
   if (!ext) {
-    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.1.1');
+    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.1.4');
     seal.ext.register(ext);
   }
   // 编写任务指令
@@ -234,6 +234,7 @@ function main() {
         } else if(arg4 && /^\d+$/.test(arg4)){//判断参数4是否是qq号
           const arg5 = cmdArgs.getArgN(5);
           targetid = `QQ:` + arg4;
+          targetStore = taskStoredata[targetid] || { tasks: [] };
           if (arg5 == '是') {
             newtask.reminder = "1";
             replytextadd = `对象为${arg4}的任务： "${name}" 已添加，截止时间 ${strdeadline}，已设置提醒`;
@@ -259,7 +260,8 @@ function main() {
         return seal.ext.newCmdExecuteResult(true);
       }
       case 'list': {
-        if (!cmdArgs.getArgN(2)) {
+        const targetflag = cmdArgs.getArgN(2);
+        if (!targetflag) {
           let yourlisttext = '🈚';
           let publiclisttext = '🈚';
           if (taskStore.tasks.length !== 0){
@@ -284,13 +286,13 @@ function main() {
           seal.replyToSender(ctx, msg, `你的任务列表：\n${yourlisttext}\n公开任务列表：\n${publiclisttext}`);
           return seal.ext.newCmdExecuteResult(true);
         }else {
-          let targetuserid =  `QQ:` + cmdArgs.getArgN(2);
+          let targetuserid =  `QQ:` + targetflag;
           let targettaskStore: TaskStore = taskStoredata[targetuserid] || { tasks: [] };
           let yourlisttext = '🈚';
           let publiclisttext = '🈚';
           if (targettaskStore.tasks.length !== 0){
-            const taskList = taskStore.tasks.map(t =>
-              `[${t.completed === '1' ? '✅' : '⏳'}] ${t.name} (进度: ${t.progress}%, 截止: ${t.deadline})`
+            const taskList = targettaskStore.tasks.map(t =>
+              `[${t.completed === '1' ? '✅' : '⏳'}] 编号：${t.id}任务：${t.name} (进度: ${t.progress}%, 截止: ${t.deadline})`
             ).join('\n');
             yourlisttext = `${taskList}`;
           }
@@ -303,7 +305,7 @@ function main() {
           }
           if (thisgrouptaskstore.tasks.length !== 0){
             const publictasklist = thisgrouptaskstore.tasks.map(t =>
-              `[${t.completed === '1' ? '✅' : '⏳'}] ${t.name} (进度: ${t.progress}%, 截止: ${t.deadline})`
+              `[${t.completed === '1' ? '✅' : '⏳'}] 编号：${t.id}任务：${t.name} (进度: ${t.progress}%, 截止: ${t.deadline})`
             ).join('\n');
             publiclisttext = `${publictasklist}`;
           }
