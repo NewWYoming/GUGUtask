@@ -140,7 +140,7 @@ function main() {
   // 注册扩展
   let ext = seal.ext.find('GUGUtask');
   if (!ext) {
-    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.1.0');
+    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.1.1');
     seal.ext.register(ext);
   }
   // 编写任务指令
@@ -284,7 +284,7 @@ function main() {
           seal.replyToSender(ctx, msg, `你的任务列表：\n${yourlisttext}\n公开任务列表：\n${publiclisttext}`);
           return seal.ext.newCmdExecuteResult(true);
         }else {
-          let targetuserid = cmdArgs.getArgN(2);
+          let targetuserid =  `QQ:` + cmdArgs.getArgN(2);
           let targettaskStore: TaskStore = taskStoredata[targetuserid] || { tasks: [] };
           let yourlisttext = '🈚';
           let publiclisttext = '🈚';
