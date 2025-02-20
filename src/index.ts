@@ -140,7 +140,7 @@ function main() {
   // 注册扩展
   let ext = seal.ext.find('GUGUtask');
   if (!ext) {
-    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.0.0');
+    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.0.1');
     seal.ext.register(ext);
   }
   // 编写任务指令
@@ -182,7 +182,12 @@ function main() {
         deadlineDate.setMilliseconds(0);
         //检查参数3是否为数字
         if (!isNaN(Number(deadline))) {
-          deadlineDate.setDate(deadlineDate.getDate() + Number(deadline));
+          if (Number(deadline) < 0 || Number(deadline) > 365 || !Number.isInteger(Number(deadline))) {
+            seal.replyToSender(ctx, msg, '请检查输入的截止天数是否过大或不是正整数');
+            return seal.ext.newCmdExecuteResult(false);
+          }else {
+            deadlineDate.setDate(deadlineDate.getDate() + Number(deadline));
+          }
         }else if (deadline.match(/^\d{4}-\d{2}-\d{2}$/)) {
           deadlineDate = new Date(deadline);
         }else{
@@ -300,9 +305,7 @@ function main() {
         return ret;
       }
       default: {
-        const ret = seal.ext.newCmdExecuteResult(true);
-        ret.showHelp = true;
-        return ret;
+        seal.replyToSender(ctx, msg, '未知的任务命令，请使用".任务 help"查看帮助');
       }
     }
   }
