@@ -54,7 +54,7 @@ function remind(ext) {
   //遍历所有id
   let remindtext = {};
   for (let userid in alltaskdata) {
-    let flag = 0;
+    let flag = {};
     let taskStore: TaskStore = alltaskdata[userid];
     for (let task of taskStore.tasks) {
       //检查是否设置了提醒
@@ -64,11 +64,11 @@ function remind(ext) {
           remindtext[groupid] = '';
         }
         remindtext[groupid] = remindtext[groupid] + `⏳ ${task.name} (进度: ${task.progress}%, 截止: ${task.deadline})\n`
-        flag = 1;
+        flag[groupid] = 1;
       }
     }
     for (let groupid in remindtext) {
-      if (flag === 1) {
+      if (flag[groupid] === 1) {
         //对“QQ:15556"删去'QQ:'
         let useridnumber = userid.replace(/[^0-9]/ig,"");
         remindtext[groupid] = remindtext[groupid] + `[CQ:at,qq=${useridnumber}]\n`
@@ -86,7 +86,7 @@ function remindingroup(ext,selfgroupid) {
   //遍历所有id
   let remindtext = {};
   for (let userid in alltaskdata) {
-    let flag = 0;
+    let flag = {};
     let taskStore: TaskStore = alltaskdata[userid];
     for (let task of taskStore.tasks) {
       //检查是否设置了提醒
@@ -96,11 +96,11 @@ function remindingroup(ext,selfgroupid) {
           remindtext[groupid] = '';
         }
         remindtext[groupid] = remindtext[groupid] + `⏳ ${task.name} (进度: ${task.progress}%, 截止: ${task.deadline})\n`
-        flag = 1;
+        flag[groupid] = 1;
       }
     }
     for (let groupid in remindtext) {
-      if (flag === 1) {
+      if (flag[groupid] === 1) {
         //对“QQ:15556"删去'QQ:'
         let useridnumber = userid.replace(/[^0-9]/ig,"");
         remindtext[groupid] = remindtext[groupid] + `[CQ:at,qq=${useridnumber}]\n`
@@ -108,7 +108,11 @@ function remindingroup(ext,selfgroupid) {
     }
   }
   let ctxNMsg = getCtxAndMsgById(selfgroupid, '0');
-  seal.replyGroup(ctxNMsg.ctx,ctxNMsg.msg,remindtext[selfgroupid]+'');
+  if (remindtext[selfgroupid]) {
+    seal.replyGroup(ctxNMsg.ctx,ctxNMsg.msg,remindtext[selfgroupid]+'');
+  } else {
+    seal.replyGroup(ctxNMsg.ctx,ctxNMsg.msg,'这个群没有需要提醒的任务了！');
+  }
 }
 
 function deletepast(ext, todaydate:Date) {
@@ -122,8 +126,12 @@ function deletepast(ext, todaydate:Date) {
     // 过滤掉过期的任务
     taskStore.tasks = taskStore.tasks.filter(task => {
       const taskDeadline = new Date(task.deadline);
-      const today = todaydate;
-
+      //today是只有年月日的日期
+      let today = new Date(todaydate);
+      today.setHours(0);
+      today.setMinutes(0);
+      today.setSeconds(0);
+      today.setMilliseconds(0);
       // 如果任务截止日期在今天之后或等于今天，保留
       return taskDeadline >= today;
     });
@@ -140,7 +148,7 @@ function main() {
   // 注册扩展
   let ext = seal.ext.find('GUGUtask');
   if (!ext) {
-    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.1.4');
+    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.1.5');
     seal.ext.register(ext);
   }
   // 编写任务指令
