@@ -70,8 +70,12 @@ function remind(ext) {
     for (let groupid in remindtext) {
       if (flag[groupid] === 1) {
         //对“QQ:15556"删去'QQ:'
-        let useridnumber = userid.replace(/[^0-9]/ig,"");
-        remindtext[groupid] = remindtext[groupid] + `[CQ:at,qq=${useridnumber}]\n`
+        if (userid === 'public') {
+          remindtext[groupid] = remindtext[groupid] + `公开任务\n`
+        } else {
+          let useridnumber = userid.replace(/[^0-9]/ig,"");
+          remindtext[groupid] = remindtext[groupid] + `[CQ:at,qq=${useridnumber}]\n`
+        }
       }
     }
   }
@@ -102,8 +106,12 @@ function remindingroup(ext,selfgroupid) {
     for (let groupid in remindtext) {
       if (flag[groupid] === 1) {
         //对“QQ:15556"删去'QQ:'
-        let useridnumber = userid.replace(/[^0-9]/ig,"");
-        remindtext[groupid] = remindtext[groupid] + `[CQ:at,qq=${useridnumber}]\n`
+        if (userid === 'public') {
+          remindtext[groupid] = remindtext[groupid] + `公开任务\n`
+        } else {
+          let useridnumber = userid.replace(/[^0-9]/ig,"");
+          remindtext[groupid] = remindtext[groupid] + `[CQ:at,qq=${useridnumber}]\n`
+        }
       }
     }
   }
@@ -148,7 +156,7 @@ function main() {
   // 注册扩展
   let ext = seal.ext.find('GUGUtask');
   if (!ext) {
-    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.1.5');
+    ext = seal.ext.new('GUGUtask', 'NewWYoming', '1.1.6');
     seal.ext.register(ext);
   }
   // 编写任务指令
